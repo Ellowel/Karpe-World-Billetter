@@ -1,0 +1,50 @@
+name: karpe-watch
+
+# Legg denne filen i repoet som: .github/workflows/karpe-watch.yml
+
+on:
+  schedule:
+    # Hvert 15. minutt. GitHub kjører cron "best effort" og kan være
+    # 5-15 min forsinket ved høy last - helt greit for annonseringer.
+    - cron: "*/15 * * * *"
+  workflow_dispatch: # lar deg kjøre manuelt fra Actions-fanen
+
+permissions:
+  contents: write # trengs for å skrive state.json tilbake til repoet
+
+concurrency:
+  group: karpe-watch
+  cancel-in-progress: false
+
+jobs:
+  sjekk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Se etter nye Karpe-datoer
+        env:
+          TM_API_KEY: ${{ secrets.TM_API_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          # Bruk disse i stedet hvis du heller vil ha Pushover:
+          # PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
+          # PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
+        run: python karpe_watch.py
+
+      - name: Lagre tilstand
+        run: |
+          git config user.name "karpe-watch"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state.json
+          if git diff --cached --quiet; then
+            echo "Ingen endring i state.json"
+          else
+            git commit -m "state: $(date -u +%FT%TZ)"
+            git push
+          fi
